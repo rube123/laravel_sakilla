@@ -58,4 +58,53 @@ class RentalController extends Controller
         $rental->load('customer', 'inventory.film');
         return view('rentals.show', compact('rental'));
     }
+
+
+    public function edit(Rental $rental)
+{
+    $films = Film::all();
+    $customers = Customer::all();
+    return view('rentals.edit', compact('rental', 'films', 'customers'));
+}
+
+public function update(Request $request, Rental $rental)
+{
+    $request->validate([
+        'film_id' => 'required|exists:film,film_id',
+        'customer_id' => 'required|exists:customer,customer_id',
+    ]);
+
+    // Actualizar inventory si cambió la película
+    if ($rental->inventory->film_id != $request->film_id) {
+        $inventory = Inventory::where('film_id', $request->film_id)
+            ->whereNotIn('inventory_id', function($query) {
+                $query->select('inventory_id')->from('rental')->whereNull('return_date');
+            })
+            ->first();
+
+        if (!$inventory) {
+            return redirect()->back()->with('error', 'No hay copias disponibles para esta película.');
+        }
+
+        $rental->inventory_id = $inventory->inventory_id;
+    }
+
+    $rental->customer_id = $request->customer_id;
+    $rental->save();
+
+    return redirect()->route('rentals.index')->with('success', 'Renta actualizada correctamente.');
+}
+
+public function destroy(Rental $rental)
+{
+    $rental->delete();
+    return redirect()->route('rentals.index')->with('success', 'Renta eliminada correctamente.');
+}
+
+public function return(Rental $rental)
+{
+    $rental->return_date = now();
+    $rental->save();
+    return redirect()->route('rentals.index')->with('success', 'Película devuelta correctamente.');
+}
 }
